@@ -256,7 +256,7 @@ fun DownloadDetailPage(
                     onClick = { },
                 )
             }
-            items(detailInfo.items, { it.dir_path }) {
+            items(detailInfo.items, { "${it.dir_path}_${it.title}" }) {
                 DownloadDetailItem(
                     item = it,
                     isOut = state.outRecordMap.containsKey(it.dir_path),

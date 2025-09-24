@@ -412,7 +412,7 @@ fun DownloadListPage(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 80.dp),
             ) {
-                items(state.list, { it.dir_path }) {
+                items(state.list, { "${it.dir_path}_${it.title}_${it.id}" }) {
                     DownloadListItem(
                         item = it,
                         onClick = {
