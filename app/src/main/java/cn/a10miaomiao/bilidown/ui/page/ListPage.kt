@@ -20,6 +20,8 @@ import cn.a10miaomiao.bilidown.common.datastore.rememberDataStorePreferencesFlow
 import cn.a10miaomiao.bilidown.common.molecule.collectAction
 import cn.a10miaomiao.bilidown.common.molecule.rememberPresenter
 import cn.a10miaomiao.bilidown.entity.BiliAppInfo
+import cn.a10miaomiao.bilidown.entity.DownloadItemInfo
+import cn.a10miaomiao.bilidown.service.BiliDownService
 import cn.a10miaomiao.bilidown.ui.BiliDownScreen
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -31,6 +33,7 @@ data class ListPageState(
 
 sealed class ListPageAction {
     object Add : ListPageAction()
+    object ExportAll : ListPageAction()
 }
 
 @Composable
@@ -53,6 +56,11 @@ fun ListPagePresenter(
         when (it) {
             ListPageAction.Add -> {
             }
+            ListPageAction.ExportAll -> {
+                // 在列表页面的全部导出功能需要与子页面配合
+                // 这里暂时不实现，因为ListPage显示的是应用列表，不是下载列表
+                // 实际的全部导出需要在DownloadListPage中实现
+            }
         }
     }
     return ListPageState(
@@ -69,6 +77,18 @@ fun ListPage(
     val scope = rememberCoroutineScope()
     val (state, channel) = rememberPresenter {
         ListPagePresenter(context, it)
+    }
+    
+    // 监听全局事件
+    val appState = remember { (context.applicationContext as cn.a10miaomiao.bilidown.BiliDownApp).state }
+    LaunchedEffect(appState) {
+        appState.globalEvents.collect { event ->
+            when (event) {
+                is cn.a10miaomiao.bilidown.state.GlobalEvent.ExportAll -> {
+                    channel.trySend(ListPageAction.ExportAll)
+                }
+            }
+        }
     }
     if (state.appList.isEmpty()) {
         Box(

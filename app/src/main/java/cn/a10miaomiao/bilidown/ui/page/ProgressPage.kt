@@ -85,13 +85,17 @@ fun ProgressPagePresenter(
 
             is ProgressPageAction.GetTaskList -> {
                 val biliDownService = BiliDownService.getService(context)
-                recordList = biliDownService.getRecordList(OutRecord.STATUS_WAIT)
+                // 获取等待中和进行中的任务
+                val waitingTasks = biliDownService.getRecordList(OutRecord.STATUS_WAIT)
+                val inProgressTasks = biliDownService.getRecordList(OutRecord.STATUS_IN_PROGRESS)
+                recordList = waitingTasks + inProgressTasks
+                
                 withContext(Dispatchers.IO) {
                     recordList = recordList.map { record ->
-                        if (record.status == 1) {
+                        if (record.status == OutRecord.STATUS_SUCCESS) {
                             val exists = File(record.outFilePath).exists()
                             record.copy(
-                                status = if (exists) 1 else -1,
+                                status = if (exists) OutRecord.STATUS_SUCCESS else -1,
                             )
                         } else {
                             record
@@ -107,7 +111,10 @@ fun ProgressPagePresenter(
             is ProgressPageAction.RemoveTask -> {
                 val biliDownService = BiliDownService.getService(context)
                 biliDownService.delTask(it.record, false)
-                recordList = biliDownService.getRecordList(OutRecord.STATUS_WAIT)
+                // 重新获取等待中和进行中的任务
+                val waitingTasks = biliDownService.getRecordList(OutRecord.STATUS_WAIT)
+                val inProgressTasks = biliDownService.getRecordList(OutRecord.STATUS_IN_PROGRESS)
+                recordList = waitingTasks + inProgressTasks
             }
         }
     }

@@ -8,11 +8,13 @@ import android.os.IBinder
 import android.widget.Toast
 import androidx.documentfile.provider.DocumentFile
 import cn.a10miaomiao.bilidown.BiliDownApp
+import cn.a10miaomiao.bilidown.common.BiliDownOutFile
 import cn.a10miaomiao.bilidown.common.CommandUtil
 import cn.a10miaomiao.bilidown.common.file.MiaoDocumentFile
 import cn.a10miaomiao.bilidown.db.AppDatabase
 import cn.a10miaomiao.bilidown.db.dao.OutRecord
 import cn.a10miaomiao.bilidown.entity.BiliDownloadEntryInfo
+import cn.a10miaomiao.bilidown.entity.DownloadItemInfo
 import cn.a10miaomiao.bilidown.shizuku.util.RemoteServiceUtil
 import cn.a10miaomiao.bilidown.state.AppState
 import cn.a10miaomiao.bilidown.state.TaskStatus
@@ -605,17 +607,29 @@ class BiliDownService :
     suspend fun startTask(
         task: OutRecord,
     ) {
+        // 先将任务状态更新为进行中
+        putOutRecord(
+            task.entryDirPath,
+            task.outFilePath,
+            task.title,
+            task.cover,
+            status = OutRecord.STATUS_IN_PROGRESS
+        )
+        
         val isSuccess = exportBiliVideo(
             task.entryDirPath,
             File(task.outFilePath)
         )
-        if (isSuccess) {
+        
+        // 如果导出失败，将状态重置为等待
+        if (!isSuccess) {
             putOutRecord(
                 task.entryDirPath,
                 task.outFilePath,
                 task.title,
                 task.cover,
-                status = OutRecord.STATUS_IN_PROGRESS
+                status = OutRecord.STATUS_WAIT,
+                message = "导出失败，请重试"
             )
         }
     }
@@ -649,6 +663,92 @@ class BiliDownService :
                 toast("该视频已在队列中：${record.title}")
             }
         }
+    }
+
+    /**
+     * 批量添加导出任务
+     * @param items 需要导出的视频项目列表
+     * @return 成功添加的任务数量
+     */
+    suspend fun addBatchTasks(
+        items: List<DownloadItemInfo>
+    ): Int {
+        val outRecordDao = appDatabase.outRecordDao()
+        var addedCount = 0
+        val failedTitles = mutableListOf<String>()
+        
+        items.forEach { item ->
+            if (!item.is_completed) {
+                return@forEach
+            }
+            
+            try {
+                val record = outRecordDao.findByPath(item.dir_path)
+                if (record != null) {
+                    if (record.status == OutRecord.STATUS_SUCCESS) {
+                        failedTitles.add("已导出: ${item.title}")
+                    } else {
+                        failedTitles.add("队列中: ${item.title}")
+                    }
+                    return@forEach
+                }
+                
+                // 生成安全的文件名
+                val safeFileName = item.title
+                    .replace("[\\/:*?\"<>|]".toRegex(), "_")
+                    .take(50) // 限制文件名长度
+                val fileName = "${safeFileName}.mp4"
+                val outFile = BiliDownOutFile(fileName)
+                
+                // 如果文件已存在，在文件名后面加上数字
+                var finalFileName = fileName
+                var counter = 1
+                while (BiliDownOutFile(finalFileName).exists()) {
+                    finalFileName = "${safeFileName}_${counter}.mp4"
+                    counter++
+                    if (counter > 999) { // 防止无限循环
+                        failedTitles.add("文件名冲突: ${item.title}")
+                        return@forEach
+                    }
+                }
+                
+                val finalOutFile = BiliDownOutFile(finalFileName)
+                val currentTime = System.currentTimeMillis()
+                val newRecord = OutRecord(
+                    entryDirPath = item.dir_path,
+                    outFilePath = finalOutFile.path,
+                    title = item.title,
+                    cover = item.cover,
+                    status = OutRecord.STATUS_WAIT,
+                    type = 1,
+                    createTime = currentTime,
+                    updateTime = currentTime,
+                )
+                outRecordDao.insertAll(newRecord)
+                addedCount++
+            } catch (e: Exception) {
+                e.printStackTrace()
+                failedTitles.add("异常: ${item.title}")
+            }
+        }
+        
+        // 显示结果提示
+        val message = if (addedCount > 0) {
+            if (failedTitles.isEmpty()) {
+                "成功添加${addedCount}个导出任务"
+            } else {
+                "成功添加${addedCount}个任务，${failedTitles.size}个失败"
+            }
+        } else {
+            if (failedTitles.isEmpty()) {
+                "没有可导出的视频"
+            } else {
+                "所有视频都已存在或不可导出"
+            }
+        }
+        toast(message)
+        
+        return addedCount
     }
 
     suspend fun delTask(

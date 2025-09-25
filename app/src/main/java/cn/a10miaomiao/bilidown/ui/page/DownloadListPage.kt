@@ -38,6 +38,7 @@ import cn.a10miaomiao.bilidown.common.molecule.rememberPresenter
 import cn.a10miaomiao.bilidown.entity.DownloadInfo
 import cn.a10miaomiao.bilidown.entity.DownloadItemInfo
 import cn.a10miaomiao.bilidown.entity.DownloadType
+import cn.a10miaomiao.bilidown.service.BiliDownService
 import cn.a10miaomiao.bilidown.shizuku.localShizukuPermission
 import cn.a10miaomiao.bilidown.ui.BiliDownScreen
 import cn.a10miaomiao.bilidown.ui.components.DownloadListItem
@@ -70,6 +71,8 @@ sealed class DownloadListPageAction {
         val packageName: String,
         val enabledShizuku: Boolean,
     ) : DownloadListPageAction()
+    
+    object ExportAll : DownloadListPageAction()
 }
 
 @Composable
@@ -214,6 +217,25 @@ fun DownloadListPagePresenter(
                     getList(it.packageName, it.enabledShizuku)
                 }
             }
+            is DownloadListPageAction.ExportAll -> {
+                // 全部导出功能
+                val allCompletedItems = mutableListOf<DownloadItemInfo>()
+                list.forEach { downloadInfo ->
+                    downloadInfo.items.forEach { item ->
+                        if (item.is_completed) {
+                            allCompletedItems.add(item)
+                        }
+                    }
+                }
+                
+                if (allCompletedItems.isNotEmpty()) {
+                    val biliDownService = BiliDownService.getService(context)
+                    val addedCount = biliDownService.addBatchTasks(allCompletedItems)
+                    if (addedCount > 0) {
+                        // 成功添加任务
+                    }
+                }
+            }
         }
     }
     return DownloadListPageState(
@@ -240,6 +262,18 @@ fun DownloadListPage(
 
     val (state, channel) = rememberPresenter(listOf(packageName, permissionState)) {
         DownloadListPagePresenter(context, it)
+    }
+
+    // 监听全局事件
+    val appState = remember { (context.applicationContext as cn.a10miaomiao.bilidown.BiliDownApp).state }
+    LaunchedEffect(appState) {
+        appState.globalEvents.collect { event ->
+            when (event) {
+                is cn.a10miaomiao.bilidown.state.GlobalEvent.ExportAll -> {
+                    channel.trySend(DownloadListPageAction.ExportAll)
+                }
+            }
+        }
     }
 
     LaunchedEffect(

@@ -87,6 +87,7 @@ fun RecordItem(
                         ) {
                             val statusText = when (status) {
                                 OutRecord.STATUS_WAIT -> "队列中"
+                                OutRecord.STATUS_IN_PROGRESS -> "导出中"
                                 OutRecord.STATUS_SUCCESS -> "已导出"
                                 OutRecord.STATUS_FAIL -> "导出出现异常"
                                 -1 -> "导出文件已被删除"
@@ -105,13 +106,16 @@ fun RecordItem(
                             )
                             Box() {
                                 IconButton(
-                                    onClick = { expandedMoreMenu = true }
+                                    onClick = { expandedMoreMenu = true },
+                                    enabled = status != OutRecord.STATUS_IN_PROGRESS // 进行中的任务不能操作
                                 ) {
                                     Icon(Icons.Filled.MoreVert, null)
                                 }
                                 val menus = remember<List<String>>(status) {
                                     if (status == OutRecord.STATUS_SUCCESS) {
                                         listOf("删除记录", "删除记录及文件")
+                                    } else if (status == OutRecord.STATUS_IN_PROGRESS) {
+                                        emptyList() // 进行中的任务不显示菜单
                                     } else {
                                         listOf("移除任务")
                                     }
